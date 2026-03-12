@@ -2,22 +2,112 @@ import networkx as nx
 from pyvis.network import Network
 import tempfile
 import os
+from config import DATASET_COLORS
+
+def create_merged_graph(edge_df, root_genes, height="600px"):
+    """
+    Creates a pyvis graph for the merged dataset.
+    edge_df: DataFrame with 'from', 'to', and 'dataset' columns.
+    root_genes: list of input genes to highlight.
+    """
+    if edge_df is None or edge_df.empty:
+        return None
+
+    net = Network(height=height, width="100%", notebook=False, directed=False)
+    
+    # Track nodes
+    nodes = set(edge_df['from'].str.upper()) | set(edge_df['to'].str.upper())
+    root_genes = {str(g).strip().upper() for g in root_genes}
+    
+    # Add nodes
+    for node in nodes:
+        is_root = node in root_genes
+        color = "#e74c3c" if is_root else "#3498db"
+        size = 30 if is_root else 20
+        net.add_node(node, label=node, color=color, size=size, font={'size': 18},
+                     title=node)
+    
+    # Add edges with colors from config
+    for _, row in edge_df.iterrows():
+        u, v = str(row['from']).upper(), str(row['to']).upper()
+        ds = row.get('dataset', 'unknown')
+        color = DATASET_COLORS.get(ds, "#bdc3c7")
+        net.add_edge(u, v, color=color, width=2, title=f"Dataset: {ds}")
+
+    # Use same options and injection as other graphs
+    options = """
+    var options = {
+      "nodes": { "font": { "size": 18 }, "borderWidth": 2 },
+      "edges": { "smooth": false },
+      "physics": {
+        "forceAtlas2Based": { "gravitationalConstant": -50, "centralGravity": 0.01, "springLength": 100, "springConstant": 0.08, "avoidOverlap": 1 },
+        "solver": "forceAtlas2Based",
+        "stabilization": { "enabled": true, "iterations": 200 }
+      },
+      "interaction": { "hover": true, "navigationButtons": false }
+    }
+    """
+    net.set_options(options)
+
+    tmp_dir = tempfile.gettempdir()
+    tmp_file = os.path.join(tmp_dir, f"ppi_merged_{os.getpid()}.html")
+    net.save_graph(tmp_file)
+
+    with open(tmp_file, "r") as f:
+        html = f.read()
+
+    # Reuse the same injection script for consistency
+    injection = """
+    <style>
+        .export-controls { position: absolute; top: 10px; right: 10px; z-index: 1000; display: flex; gap: 5px; }
+        .export-btn { padding: 5px 10px; background-color: #f8f9fa; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; font-family: sans-serif; font-size: 12px; }
+    </small>
+    <div class="export-controls">
+        <button class="export-btn" onclick="downloadPNG()">PNG</button>
+    </div>
+    <script type="text/javascript">
+    function downloadPNG() {
+        var canvas = document.getElementsByTagName('canvas')[0];
+        if (!canvas) return;
+        var link = document.createElement('a');
+        link.download = 'ppi_merged_graph.png';
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+    }
+    (function() {
+        var checkNetwork = setInterval(function() {
+            if (typeof network !== 'undefined') {
+                clearInterval(checkNetwork);
+                network.on("stabilizationIterationsDone", function () { network.fit(); });
+                setTimeout(function() { network.fit(); }, 500);
+            }
+        }, 100);
+    })();
+    </script>
+    """
+    new_html = html.replace("</body>", injection + "</body>")
+    with open(tmp_file, "w") as f:
+        f.write(new_html)
+    return tmp_file
 
 def create_gene_list_graph(df, gene_list):
     """
-    Creates a pyvis graph showing only connections among the given gene_list.
-    Genes with no connections are shown as isolated nodes.
+    Creates a pyvis graph showing ONLY connections among the given gene_list.
     """
     gene_set = {str(g).strip().upper() for g in gene_list if str(g).strip()}
     if not gene_set:
         return None
 
-    # Filter edges: both endpoints must be in gene_set
-    mask = (
-        df['from'].str.upper().isin(gene_set) &
-        df['to'].str.upper().isin(gene_set)
-    )
-    edge_df = df[mask]
+    # Filter edges: BOTH endpoints must be in gene_set
+    mask_from = df['from'].str.upper().isin(gene_set)
+    if 'original_from' in df.columns:
+        mask_from |= df['original_from'].str.upper().isin(gene_set)
+        
+    mask_to = df['to'].str.upper().isin(gene_set)
+    if 'original_to' in df.columns:
+        mask_to |= df['original_to'].str.upper().isin(gene_set)
+        
+    edge_df = df[mask_from & mask_to]
 
     net = Network(height="600px", width="100%", notebook=False, directed=False)
     options = """
@@ -54,10 +144,10 @@ def create_gene_list_graph(df, gene_list):
     """
     net.set_options(options)
 
-    # Add all input genes as nodes (connected or isolated)
+    # In strict mode, only input genes are shown
     connected = set()
     if not edge_df.empty:
-        connected = set(edge_df['from'].str.upper()) | set(edge_df['to'].str.upper())
+        connected = (set(edge_df['from'].str.upper()) | set(edge_df['to'].str.upper())) & gene_set
 
     for gene in gene_set:
         color = "#e74c3c" if gene in connected else "#95a5a6"

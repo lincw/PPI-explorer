@@ -1,24 +1,55 @@
 import pandas as pd
 import os
 
-def load_ppi_data(file_path, map_file_path=None):
+def load_ppi_data(file_path, map_file_path=None, **kwargs):
     """
     Loads PPI data and optionally merges with Ensembl IDs.
-    Supports .csv and .tsv files.
+    Supports .csv, .tsv, and .xlsx files.
     """
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"Data file not found: {file_path}")
     
-    # Determine separator based on extension
-    sep = '\t' if file_path.endswith('.tsv') else ','
-    df = pd.read_csv(file_path, sep=sep)
+    # Determine loader based on extension
+    if file_path.endswith('.xlsx'):
+        # Check if it's the bacterial effector dataset which needs special handling
+        if "Supplementary Data 11" in file_path and "_updated" not in file_path:
+            df = pd.read_excel(file_path, sheet_name='11A', header=3)
+        else:
+            df = pd.read_excel(file_path, **kwargs)
+    else:
+        sep = '\t' if file_path.endswith('.tsv') else ','
+        df = pd.read_csv(file_path, sep=sep, **kwargs)
     
     # Standardize column names
-    if 'SymbolA' in df.columns and 'SymbolB' in df.columns:
+    if 'from' in df.columns and 'to' in df.columns:
+        # Standard format used in updated files
+        if 'original_from' not in df.columns:
+            df['original_from'] = df['from']
+        if 'original_to' not in df.columns:
+            df['original_to'] = df['to']
+    elif 'SymbolA' in df.columns and 'SymbolB' in df.columns:
         # BioPlex format
         df = df.rename(columns={'SymbolA': 'from', 'SymbolB': 'to'})
         if 'original_SymbolA' in df.columns and 'original_SymbolB' in df.columns:
             df = df.rename(columns={'original_SymbolA': 'original_from', 'original_SymbolB': 'original_to'})
+        else:
+            df['original_from'] = df['from']
+            df['original_to'] = df['to']
+    elif 'viral_protein' in df.columns and 'human_protein_HGNC' in df.columns:
+        # Fallback for original pancov format
+        df = df.rename(columns={'viral_protein': 'from', 'human_protein_HGNC': 'to'})
+        df['original_from'] = df['from']
+        df['original_to'] = df['to']
+    elif 'Viral protein' in df.columns and 'Host protein' in df.columns:
+        # Fallback for original HuSCI format
+        df = df.rename(columns={'Viral protein': 'from', 'Host protein': 'to'})
+        df['original_from'] = df['from']
+        df['original_to'] = df['to']
+    elif 'Human protein symbol' in df.columns and 'Effector Abbreviation' in df.columns:
+        # Fallback for original Bacterial effector format
+        df = df.rename(columns={'Effector Abbreviation': 'from', 'Human protein symbol': 'to'})
+        df['original_from'] = df['from']
+        df['original_to'] = df['to']
     elif 'from' not in df.columns or 'to' not in df.columns:
         # Generic rename for other formats
         rename_map = {
@@ -29,35 +60,50 @@ def load_ppi_data(file_path, map_file_path=None):
     
     # Keep only necessary columns
     cols_to_keep = ['from', 'to']
-    if 'original_from' in df.columns and 'original_to' in df.columns:
-        cols_to_keep.extend(['original_from', 'original_to'])
+    if 'original_from' in df.columns: cols_to_keep.append('original_from')
+    if 'original_to' in df.columns: cols_to_keep.append('original_to')
+    
+    # Check if we already have enriched columns
+    enriched_cols = ['from_entrez', 'to_entrez', 'from_ensembl', 'to_ensembl', 'from_uniprot', 'to_uniprot']
+    for ec in enriched_cols:
+        if ec in df.columns:
+            cols_to_keep.append(ec)
     
     df = df[cols_to_keep]
     
-    if map_file_path and os.path.exists(map_file_path):
-        # Load map: HGNC -> ensemblID, UniprotID
-        map_df = pd.read_csv(map_file_path, usecols=["HGNC", "ensemblID", "UniprotID"])
+    # Only perform merge if enriched columns are missing and a map file is provided
+    has_enriched = all(c in df.columns for c in enriched_cols)
+    
+    if not has_enriched and map_file_path and os.path.exists(map_file_path):
+        # Load map: HGNC -> ensemblID, entrezID, UniprotID
+        map_df = pd.read_csv(map_file_path, usecols=["HGNC", "ensemblID", "entrezID", "UniprotID"])
+        
+        # Drop duplicates by HGNC to avoid many-to-many merge issues
+        map_df = map_df.drop_duplicates(subset=["HGNC"])
         
         # Rename to match internal logic
         map_df = map_df.rename(columns={
             "HGNC": "hgnc_symbol",
             "ensemblID": "ensembl_gene_id",
+            "entrezID": "entrez_id",
             "UniprotID": "uniprot"
         })
         
-        # Replace empty strings or whitespace-only strings with NaN for proper filling
-        map_df = map_df.replace(r"^\s*$", pd.NA, regex=True)
-        
-        # Drop duplicates to avoid many-to-many merge issues
-        map_df = map_df.drop_duplicates(subset=["hgnc_symbol"])
-        
         # Merge for 'from' column
         df = df.merge(map_df, left_on="from", right_on="hgnc_symbol", how="left")
-        df = df.rename(columns={"ensembl_gene_id": "from_ensembl", "uniprot": "from_uniprot"}).drop(columns=["hgnc_symbol"])
+        df = df.rename(columns={
+            "ensembl_gene_id": "from_ensembl", 
+            "entrez_id": "from_entrez",
+            "uniprot": "from_uniprot"
+        }).drop(columns=["hgnc_symbol"])
         
         # Merge for 'to' column
         df = df.merge(map_df, left_on="to", right_on="hgnc_symbol", how="left")
-        df = df.rename(columns={"ensembl_gene_id": "to_ensembl", "uniprot": "to_uniprot"}).drop(columns=["hgnc_symbol"])
+        df = df.rename(columns={
+            "ensembl_gene_id": "to_ensembl", 
+            "entrez_id": "to_entrez",
+            "uniprot": "to_uniprot"
+        }).drop(columns=["hgnc_symbol"])
         
     return df
 

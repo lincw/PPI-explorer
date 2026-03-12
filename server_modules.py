@@ -6,13 +6,89 @@ import uuid
 import shutil
 import data_loader
 import graph_utils
-from config import STATIC_DIR, GLOBAL_DATA, DATASETS, STATS
+from config import STATIC_DIR, GLOBAL_DATA, DATASETS, STATS, DATASET_ABBR, DATASET_FULL, DATASET_COLORS
 
 def server(input, output, session: Session):
     session_id = str(uuid.uuid4())[:8]
     root_genes = reactive.Value(set())
     deleted_nodes = reactive.Value(set())
     pending_gene = reactive.Value("")
+    global_search_results = reactive.Value([])
+
+    @reactive.Effect
+    @reactive.event(input.global_submit)
+    def handle_global_submit():
+        query = input.global_query().strip().upper()
+        if not query:
+            return
+        
+        results = []
+        for key, df in GLOBAL_DATA.items():
+            # Check presence
+            mask = (df['from'].str.upper() == query) | (df['to'].str.upper() == query)
+            if 'original_from' in df.columns:
+                mask |= (df['original_from'].str.upper() == query)
+            if 'original_to' in df.columns:
+                mask |= (df['original_to'].str.upper() == query)
+            
+            sub_df = df[mask]
+            if not sub_df.empty:
+                results.append({
+                    "key": key,
+                    "label": DATASET_ABBR.get(key, key.replace("_", " ").upper()),
+                    "interactions": len(sub_df)
+                })
+        
+        global_search_results.set(results)
+        ui.update_navset("main_tabs", selected="Global Results")
+
+    @output
+    @render.ui
+    def global_search_results_ui():
+        results = global_search_results()
+        query = input.global_query().strip().upper()
+        
+        if not results:
+            if query:
+                return ui.div(f"No interactions found for '{query}' in any dataset.", class_="alert alert-warning")
+            return ui.div("Enter a gene symbol in the sidebar and click 'Search Everywhere'.", class_="text-muted")
+        
+        rows = []
+        for res in results:
+            # Use onclick to send data back to Shiny
+            onclick = f"Shiny.setInputValue('jump_dataset', '{res['key']}'); Shiny.setInputValue('jump_gene', '{query}'); document.getElementById('hidden_jump_btn').click();"
+            rows.append(ui.tags.tr(
+                ui.tags.td(res['label']),
+                ui.tags.td(str(res['interactions'])),
+                ui.tags.td(
+                    ui.tags.button("View Network", class_="btn btn-sm btn-outline-primary", onclick=onclick)
+                )
+            ))
+
+        return ui.tags.table(
+            ui.tags.thead(
+                ui.tags.tr(
+                    ui.tags.th("Dataset"),
+                    ui.tags.th("Interactions with " + query),
+                    ui.tags.th("Action")
+                )
+            ),
+            ui.tags.tbody(*rows),
+            class_="table table-hover"
+        )
+
+    @reactive.Effect
+    @reactive.event(input.hidden_jump_btn)
+    def handle_jump():
+        dataset = input.jump_dataset()
+        gene = input.jump_gene()
+        if dataset and gene:
+            ui.update_select("dataset", selected=dataset)
+            ui.update_text("query_gene", value=gene)
+            root_genes.set({gene})
+            deleted_nodes.set(set())
+            ui.update_navset("main_tabs", selected="Subnetwork")
+            ui.update_text("filter_text", value="")
 
     @reactive.Effect
     def handle_url_params():
@@ -130,28 +206,63 @@ def server(input, output, session: Session):
     def welcome_stats():
         stats_list = []
         meta_info = {
+            "mygene": {
+                "text": "Updated: ",
+                "date": "2026-03-12CET"
+                },
             "huri": {
-                "label": "HuRI PPI",
                 "text": "Ref: ",
-                "link_text": "Luck et al Nature 2020",
+                "link_text": "Luck et al, Nature 2020",
                 "link": "https://doi.org/10.1038/s41586-020-2188-x"
             },
             "bioplex_293": {
-                "label": "BioPlex HEK 293T",
                 "text": "Ref: ",
-                "link_text": "Huttlin et al Cell 2021",
+                "link_text": "Huttlin et al, Cell 2021",
                 "link": "https://doi.org/10.1016/j.cell.2021.04.011"
             },
             "bioplex_hct116": {
-                "label": "BioPlex HCT116",
                 "text": "Ref: ",
-                "link_text": "Huttlin et al Cell 2021",
+                "link_text": "Huttlin et al, Cell 2021",
                 "link": "https://doi.org/10.1016/j.cell.2021.04.011"
+            },
+            "pancov": {
+                "text": "Ref: ",
+                "link_text": "",
+                "link": "#"
+            },
+            "husci": {
+                "text": "Ref: ",
+                "link_text": "Kim et al, Nat Biot 2022",
+                "link": "https://doi.org/10.1038/s41587-022-01475-z"
+            },
+            "bacterial": {
+                "text": "Ref: ",
+                "link_text": "Young et al, Nat Micro",
+                "link": "https://doi.org/10.1038/s41564-025-02241-y"
             }
         }
         
+        # Separate list for data descriptions (non-PPI datasets like mygene)
+        description_list = []
+        
+        # Display mygene/nomenclature info separately at the top
+        if "mygene" in meta_info:
+            info = meta_info["mygene"]
+            label = DATASET_FULL.get("mygene", "Human gene nomenclature (MyGene.info)")
+            description_list.append(ui.div(
+                ui.h5(label),
+                ui.p(
+                    ui.em(info["text"]),
+                    info.get("date", ""),
+                    style="font-size: 0.85em; color: #666;"
+                ),
+                style="margin-bottom: 20px; border-left: 4px solid #9b59b6; padding-left: 15px; background-color: #fcf8ff;"
+            ))
+
         for name, s in STATS.items():
-            info = meta_info.get(name, {"label": name.replace("_", " ").upper(), "text": ""})
+            if name == "mygene": continue
+            info = meta_info.get(name, {"text": ""})
+            label = DATASET_FULL.get(name, name.replace("_", " ").upper())
             metadata = ""
             if info.get("text"):
                 metadata = ui.p(
@@ -161,7 +272,7 @@ def server(input, output, session: Session):
                 )
             
             stats_list.append(ui.div(
-                ui.h5(info["label"]),
+                ui.h5(label),
                 metadata,
                 ui.tags.ul(
                     ui.tags.li(f"Total Interactions: {s['num_interactions']:,}"),
@@ -170,7 +281,7 @@ def server(input, output, session: Session):
                 ),
                 style="margin-bottom: 15px; border-left: 4px solid #3498db; padding-left: 15px;"
             ))
-        return ui.div(*stats_list)
+        return ui.div(*(description_list + stats_list))
 
     @reactive.Calc
     def subnetwork_data_full():
@@ -193,9 +304,10 @@ def server(input, output, session: Session):
         nodes = pd.concat([df['from'], df['to']]).nunique()
         edges = len(df)
         roots_count = len(root_genes())
+        label = DATASET_ABBR.get(input.dataset(), input.dataset().upper())
         return ui.card(
             ui.div(
-                ui.div(ui.strong("Dataset: "), input.dataset().upper(), style="margin-right: 20px;"),
+                ui.div(ui.strong("Dataset: "), label, style="margin-right: 20px;"),
                 ui.div(ui.strong("Root Genes: "), f"{roots_count}", style="margin-right: 20px;"),
                 ui.div(ui.strong("Total Nodes: "), f"{nodes}", style="margin-right: 20px;"),
                 ui.div(ui.strong("Total Edges: "), f"{edges}"),
@@ -257,6 +369,14 @@ def server(input, output, session: Session):
         def make_uniprot_link(uid):
             if pd.isna(uid) or str(uid).strip() in ["-", ""]: return "-"
             return f'<a href="https://www.uniprot.org/uniprotkb/{uid}/entry" target="_blank">{uid}</a>'
+        def make_entrez_link(eid):
+            if pd.isna(eid) or str(eid).strip() == "": return "-"
+            # Ensure it's an integer string if possible, but keep as str for linking
+            try:
+                eid_clean = str(int(float(eid)))
+            except:
+                eid_clean = str(eid)
+            return f'<a href="https://www.ncbi.nlm.nih.gov/gene/{eid_clean}" target="_blank">{eid_clean}</a>'
         
         def make_hgnc_link(symbol):
             if pd.isna(symbol) or str(symbol).strip() == "": return "-"
@@ -273,6 +393,8 @@ def server(input, output, session: Session):
             display_df[col] = display_df[col].apply(make_ensembl_link)
         for col in ['from_uniprot', 'to_uniprot']:
             display_df[col] = display_df[col].apply(make_uniprot_link)
+        for col in ['from_entrez', 'to_entrez']:
+            display_df[col] = display_df[col].apply(make_entrez_link)
         
         if 'original_from' in display_df.columns:
             display_df['original_from'] = display_df.apply(lambda x: highlight_diff(x['original_from'], x['from']), axis=1)
@@ -292,6 +414,8 @@ def server(input, output, session: Session):
         if 'original_from' in display_df.columns:
             final_cols.append('original_from')
             col_tuples.append(('Partner A', 'Original'))
+        final_cols.append('from_entrez')
+        col_tuples.append(('Partner A', 'Entrez'))
         final_cols.append('from_ensembl')
         col_tuples.append(('Partner A', 'Ensembl'))
         final_cols.append('from_uniprot')
@@ -303,6 +427,8 @@ def server(input, output, session: Session):
         if 'original_to' in display_df.columns:
             final_cols.append('original_to')
             col_tuples.append(('Partner B', 'Original'))
+        final_cols.append('to_entrez')
+        col_tuples.append(('Partner B', 'Entrez'))
         final_cols.append('to_ensembl')
         col_tuples.append(('Partner B', 'Ensembl'))
         final_cols.append('to_uniprot')
@@ -312,7 +438,14 @@ def server(input, output, session: Session):
         display_df.columns = pd.MultiIndex.from_tuples(col_tuples)
         
         html_table = display_df.to_html(classes="interaction-table", escape=False, index=False)
-        return ui.div(ui.HTML(html_table), class_="table-container")
+        return ui.div(
+            ui.div(
+                ui.download_button("download_edges", "Download Edges (CSV)", class_="btn-outline-primary btn-sm me-2"),
+                ui.download_button("download_nodes", "Download Nodes (CSV)", class_="btn-outline-secondary btn-sm me-2"),
+                style="margin: 8px 0;"
+            ),
+            ui.div(ui.HTML(html_table), class_="table-container")
+        )
 
     @render.download(filename=lambda: f"edges_{input.dataset()}_{'-'.join(sorted(root_genes()))}.csv")
     def download_edges():
@@ -337,7 +470,155 @@ def server(input, output, session: Session):
         nodes_df['is_root'] = nodes_df['symbol'].isin(roots)
         yield nodes_df.to_csv(index=False)
 
+    # --- Merged Network Logic ---
+    merged_genes = reactive.Value([])
 
+    @reactive.Effect
+    @reactive.event(input.merged_submit)
+    def handle_merged_submit():
+        raw = input.merged_query()
+        import re
+        raw_split = re.split(r"[\n,]+", raw)
+        genes = []
+        for g in raw_split:
+            clean = g.strip().upper()
+            if not clean: continue
+            clean = re.sub(r"^[+\-*]\s*", "", clean)
+            if clean: genes.append(clean)
+        merged_genes.set(list(set(genes)))
+
+    @reactive.Calc
+    def merged_data_full():
+        genes = merged_genes()
+        if not genes: return None
+        
+        all_dfs = []
+        for ds_key, df in GLOBAL_DATA.items():
+            gene_set = set(genes)
+            if len(genes) == 1:
+                # Single protein: Show all neighbors
+                query = genes[0]
+                mask = (df['from'].str.upper() == query) | (df['to'].str.upper() == query)
+                if 'original_from' in df.columns: mask |= (df['original_from'].str.upper() == query)
+                if 'original_to' in df.columns: mask |= (df['original_to'].str.upper() == query)
+                sub_df = df[mask].copy()
+            else:
+                # Multiple proteins: Show connections among them
+                mask_from = df['from'].str.upper().isin(gene_set)
+                if 'original_from' in df.columns: mask_from |= df['original_from'].str.upper().isin(gene_set)
+                mask_to = df['to'].str.upper().isin(gene_set)
+                if 'original_to' in df.columns: mask_to |= df['original_to'].str.upper().isin(gene_set)
+                sub_df = df[mask_from & mask_to].copy()
+            
+            if not sub_df.empty:
+                sub_df['dataset'] = ds_key
+                all_dfs.append(sub_df)
+        
+        if not all_dfs: return pd.DataFrame()
+        return pd.concat(all_dfs).drop_duplicates(subset=['from', 'to', 'dataset'])
+
+    @output
+    @render.ui
+    def merged_stats_ui():
+        df = merged_data_full()
+        genes = merged_genes()
+        if df is None or not genes: return ui.div()
+        
+        n_edges = len(df)
+        n_nodes = pd.concat([df['from'], df['to']]).nunique() if not df.empty else 0
+        datasets_found = df['dataset'].unique() if not df.empty else []
+        
+        tags = [ui.span(DATASET_ABBR.get(ds, ds), 
+                        style=f"background-color: {DATASET_COLORS.get(ds, '#eee')}; color: white; padding: 2px 8px; border-radius: 10px; margin-right: 5px; font-size: 0.8em;") 
+                for ds in datasets_found]
+        
+        return ui.card(
+            ui.div(
+                ui.div(ui.strong("Input: "), f"{len(genes)} gene(s)", style="margin-right: 20px;"),
+                ui.div(ui.strong("Total Nodes: "), str(n_nodes), style="margin-right: 20px;"),
+                ui.div(ui.strong("Total Edges: "), str(n_edges), style="margin-right: 20px;"),
+                ui.div(ui.strong("Sources: "), *tags),
+                style="display: flex; flex-direction: row; align-items: center; padding: 5px 15px;"
+            ),
+            style="margin-bottom: 10px; border-left: 5px solid #666;"
+        )
+
+    @output
+    @render.ui
+    def merged_graph_container():
+        df = merged_data_full()
+        genes = merged_genes()
+        if df is None or not genes: return ui.div("Enter gene symbol(s) and click Search.", class_="text-muted")
+        if df.empty: return ui.div("No interactions found across any dataset.", class_="alert alert-warning")
+        
+        graph_file_path = graph_utils.create_merged_graph(df, genes)
+        if graph_file_path and os.path.exists(graph_file_path):
+            slug = f"merged_{hash(tuple(sorted(genes)))}"
+            unique_filename = f"ppi_merged_{session_id}_{slug}.html"
+            dest_path = STATIC_DIR / unique_filename
+            shutil.copy(graph_file_path, dest_path)
+            return ui.tags.iframe(src=f"static/{unique_filename}", width="100%", height="600px", style="border:none;")
+        return ui.div("Error generating graph.", class_="alert alert-danger")
+
+    @output
+    @render.ui
+    def merged_table_ui():
+        df = merged_data_full()
+        if df is None or df.empty: return ui.div()
+        
+        display_df = df.copy()
+        
+        def make_hgnc_link(symbol):
+            if pd.isna(symbol) or str(symbol).strip() == "": return "-"
+            return f'<a href="https://www.genenames.org/data/gene-symbol-report/#!/hgnc_id/{symbol}" target="_blank">{symbol}</a>'
+        
+        def make_ds_tag(ds):
+            color = DATASET_COLORS.get(ds, "#666")
+            name = DATASET_ABBR.get(ds, ds)
+            return f'<span style="background-color: {color}; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.85em;">{name}</span>'
+
+        display_df['from'] = display_df['from'].apply(make_hgnc_link)
+        display_df['to'] = display_df['to'].apply(make_hgnc_link)
+        display_df['Source'] = display_df['dataset'].apply(make_ds_tag)
+        
+        # Select columns to show
+        cols = ['from', 'to', 'Source']
+        # If original columns exist, add them optionally? Let's keep it simple for merged view
+        
+        html_table = display_df[cols].to_html(classes="interaction-table", escape=False, index=False)
+        return ui.div(
+            ui.div(
+                ui.download_button("download_merged_edges", "Download Edges (CSV)", class_="btn-outline-primary btn-sm me-2"),
+                ui.download_button("download_merged_nodes", "Download Nodes (CSV)", class_="btn-outline-secondary btn-sm me-2"),
+                style="margin: 8px 0;"
+            ),
+            ui.div(ui.HTML(html_table), class_="table-container")
+        )
+
+    @render.download(filename=lambda: f"merged_edges_{len(merged_genes())}.csv")
+    def download_merged_edges():
+        df = merged_data_full()
+        if df is None or df.empty:
+            yield ""
+            return
+        out = df[['from', 'to', 'dataset']].copy()
+        out.columns = ['Symbol A', 'Symbol B', 'Dataset']
+        yield out.to_csv(index=False)
+
+    @render.download(filename=lambda: f"merged_nodes_{len(merged_genes())}.csv")
+    def download_merged_nodes():
+        df = merged_data_full()
+        if df is None or df.empty:
+            yield ""
+            return
+        all_nodes = pd.concat([df['from'], df['to']]).drop_duplicates().reset_index(drop=True)
+        all_nodes.name = 'symbol'
+        genes = merged_genes()
+        nodes_df = pd.DataFrame({'symbol': all_nodes})
+        nodes_df['is_input'] = nodes_df['symbol'].isin(genes)
+        yield nodes_df.to_csv(index=False)
+
+    # --- Multi-gene query Logic ---
     genelist_genes = reactive.Value([])
 
     @reactive.Effect
@@ -345,7 +626,16 @@ def server(input, output, session: Session):
     def handle_genelist_submit():
         raw = input.genelist_input()
         import re
-        genes = [g.strip().upper() for g in re.split(r"[\n,]+", raw) if g.strip()]
+        # Split by newline or comma, then strip and remove common bullet characters like '+' or '-'
+        raw_split = re.split(r"[\n,]+", raw)
+        genes = []
+        for g in raw_split:
+            clean = g.strip().upper()
+            if not clean: continue
+            # Remove leading bullet points (+, -, *)
+            clean = re.sub(r"^[+\-*]\s*", "", clean)
+            if clean:
+                genes.append(clean)
         genelist_genes.set(genes)
 
     @reactive.Calc
@@ -356,12 +646,11 @@ def server(input, output, session: Session):
         if df is None: return None
         gene_set = set(genes)
         
-        # Match "from" side (current or original)
+        # Match interactions ONLY among the input genes (Strict Filtering)
         mask_from = df['from'].str.upper().isin(gene_set)
         if 'original_from' in df.columns:
             mask_from |= df['original_from'].str.upper().isin(gene_set)
             
-        # Match "to" side (current or original)
         mask_to = df['to'].str.upper().isin(gene_set)
         if 'original_to' in df.columns:
             mask_to |= df['original_to'].str.upper().isin(gene_set)
@@ -374,12 +663,15 @@ def server(input, output, session: Session):
         genes = genelist_genes()
         if not genes: return ui.div()
         edge_df = genelist_edge_data()
-        n_input = len(genes)
+        n_input = len(set(genes))
         n_edges = len(edge_df) if edge_df is not None else 0
-        connected = set()
+        
+        connected_in_input = set()
         if edge_df is not None and not edge_df.empty:
-            connected = set(edge_df['from'].str.upper()) | set(edge_df['to'].str.upper())
-        n_isolated = n_input - len(connected)
+            # Since we are in strict mode, all genes in edge_df ARE from the input list
+            connected_in_input = (set(edge_df['from'].str.upper()) | set(edge_df['to'].str.upper())) & set(genes)
+            
+        n_isolated = n_input - len(connected_in_input)
         return ui.card(
             ui.div(
                 ui.div(ui.strong("Input Genes: "), str(n_input), style="margin-right: 20px;"),
@@ -406,6 +698,29 @@ def server(input, output, session: Session):
             return ui.tags.iframe(src=f"static/{unique_filename}", width="100%", height="600px", style="border:none;")
         return ui.div("Error generating graph.", class_="alert alert-danger")
 
+    @render.download(filename=lambda: f"genelist_edges_{input.genelist_dataset()}_{len(genelist_genes())}.csv")
+    def download_genelist_edges():
+        df = genelist_edge_data()
+        if df is None or df.empty:
+            yield ""
+            return
+        out = df[['from', 'to']].copy()
+        out.columns = ['Symbol A', 'Symbol B']
+        yield out.to_csv(index=False)
+
+    @render.download(filename=lambda: f"genelist_nodes_{input.genelist_dataset()}_{len(genelist_genes())}.csv")
+    def download_genelist_nodes():
+        df = genelist_edge_data()
+        if df is None or df.empty:
+            yield ""
+            return
+        all_nodes = pd.concat([df['from'], df['to']]).drop_duplicates().reset_index(drop=True)
+        all_nodes.name = 'symbol'
+        genes = genelist_genes()
+        nodes_df = pd.DataFrame({'symbol': all_nodes})
+        nodes_df['is_input'] = nodes_df['symbol'].isin(genes)
+        yield nodes_df.to_csv(index=False)
+
     @output
     @render.ui
     def genelist_table_ui():
@@ -418,10 +733,27 @@ def server(input, output, session: Session):
         def make_uniprot_link(uid):
             if pd.isna(uid) or str(uid).strip() in ["-", ""]: return "-"
             return f'<a href="https://www.uniprot.org/uniprotkb/{uid}/entry" target="_blank">{uid}</a>'
+        def make_entrez_link(eid):
+            if pd.isna(eid) or str(eid).strip() == "": return "-"
+            try:
+                eid_clean = str(int(float(eid)))
+            except:
+                eid_clean = str(eid)
+            return f'<a href="https://www.ncbi.nlm.nih.gov/gene/{eid_clean}" target="_blank">{eid_clean}</a>'
+            
+        def make_hgnc_link(symbol):
+            if pd.isna(symbol) or str(symbol).strip() == "": return "-"
+            return f'<a href="https://www.genenames.org/data/gene-symbol-report/#!/hgnc_id/{symbol}" target="_blank">{symbol}</a>'
+
         for col in ['from_ensembl', 'to_ensembl']:
             display_df[col] = display_df[col].apply(make_ensembl_link)
         for col in ['from_uniprot', 'to_uniprot']:
             display_df[col] = display_df[col].apply(make_uniprot_link)
+        for col in ['from_entrez', 'to_entrez']:
+            display_df[col] = display_df[col].apply(make_entrez_link)
+            
+        for col in ['from', 'to']:
+            display_df[col] = display_df[col].apply(make_hgnc_link)
         
         # Create MultiIndex for clearer grouping
         final_cols = []
@@ -433,6 +765,8 @@ def server(input, output, session: Session):
         if 'original_from' in display_df.columns:
             final_cols.append('original_from')
             col_tuples.append(('Partner A', 'Original'))
+        final_cols.append('from_entrez')
+        col_tuples.append(('Partner A', 'Entrez'))
         final_cols.append('from_ensembl')
         col_tuples.append(('Partner A', 'Ensembl'))
         final_cols.append('from_uniprot')
@@ -444,13 +778,22 @@ def server(input, output, session: Session):
         if 'original_to' in display_df.columns:
             final_cols.append('original_to')
             col_tuples.append(('Partner B', 'Original'))
+        final_cols.append('to_entrez')
+        col_tuples.append(('Partner B', 'Entrez'))
         final_cols.append('to_ensembl')
         col_tuples.append(('Partner B', 'Ensembl'))
         final_cols.append('to_uniprot')
         col_tuples.append(('Partner B', 'UniProt'))
-
-        display_df = display_df[final_cols]
         display_df.columns = pd.MultiIndex.from_tuples(col_tuples)
-        
+
         html_table = display_df.to_html(classes="interaction-table", escape=False, index=False)
-        return ui.div(ui.HTML(html_table), class_="table-container")
+        return ui.div(
+            ui.div(
+                ui.download_button("download_genelist_edges", "Download Edges (CSV)", class_="btn-outline-primary btn-sm me-2"),
+                ui.download_button("download_genelist_nodes", "Download Nodes (CSV)", class_="btn-outline-secondary btn-sm me-2"),
+                style="margin: 8px 0;"
+            ),
+            ui.div(ui.HTML(html_table), class_="table-container")
+        )
+
+# --- Merged Network Logic ---

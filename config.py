@@ -16,7 +16,30 @@ CSS_FILE = WWW_DIR / "styles.css"
 DATASETS = {
     "huri": DATA_DIR / "huri_ppi.csv",
     "bioplex_293": DATA_DIR / "bioplex_293.tsv",
-    "bioplex_hct116": DATA_DIR / "bioplex_hct116.tsv"
+    "bioplex_hct116": DATA_DIR / "bioplex_hct116.tsv",
+    "pancov": DATA_DIR / "v2_edge.xlsx",
+    "husci": DATA_DIR / "HuSCI_PPIs.xlsx",
+    "bacterial": DATA_DIR / "bacterial_ppi.xlsx"
+}
+
+# Official Display Names
+DATASET_ABBR = {
+    "huri": "HuRI",
+    "bioplex_293": "BioPlex_HEK293T",
+    "bioplex_hct116": "BioPlex_HCT116",
+    "pancov": "Pan-coronavirus",
+    "husci": "HuSCI",
+    "bacterial": "HuMMI"
+}
+
+DATASET_FULL = {
+    "huri": "The Human Reference Interactome, HuRI",
+    "bioplex_293": "The Biophysical Interactions of ORFeome-based Complexes Network, BioPlex_HEK293T",
+    "bioplex_hct116": "BioPlex_HCT116",
+    "pancov": "Pan-coronavirus",
+    "husci": "SARS-CoV-2-Human Contactome, HuSCI",
+    "bacterial": "The Human-Microbiome Meta-Interactome, HuMMI",
+    "mygene": "Human gene nomenclature (MyGene.info)"
 }
 
 def init_workspace():
@@ -38,6 +61,16 @@ def cleanup_old_graphs():
     for p in STATIC_DIR.glob("ppi_genelist_*.html"):
         try: p.unlink()
         except: pass
+
+# Dataset colors for merged view
+DATASET_COLORS = {
+    "huri": "#3498db",        # Blue
+    "bioplex_293": "#e74c3c", # Red
+    "bioplex_hct116": "#2ecc71", # Green
+    "pancov": "#f1c40f",      # Yellow
+    "husci": "#9b59b6",       # Purple
+    "bacterial": "#e67e22"    # Orange
+}
 
 # Global Data Cache
 GLOBAL_DATA = {}

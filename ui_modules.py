@@ -1,31 +1,39 @@
 from shiny import ui
-from config import CSS_FILE
+from config import CSS_FILE, DATASET_ABBR
 
 app_ui = ui.page_sidebar(
     ui.sidebar(
-        ui.markdown("### Global Search"),
-        ui.input_select(
-            "dataset", 
-            "Select PPI Dataset:", 
-            choices={
-                "huri": "HuRI PPI",
-                "bioplex_293": "BioPlex HEK 293T",
-                "bioplex_hct116": "BioPlex HCT116"
-            },
-            selected="huri"
+        ui.div(
+            ui.markdown("#### Global Database Search"),
+            ui.input_text("global_query", None, placeholder="e.g., N"),
+            ui.input_action_button("global_submit", "Search Everywhere", class_="btn-info btn-sm w-100"),
+            style="margin-bottom: 10px;"
         ),
-        ui.input_text("query_gene", "Gene Symbol:", placeholder="e.g., CALM2"),
-        ui.input_action_button("submit", "Start New Search", class_="btn-primary w-100"),
-        ui.input_action_button("reset", "Reset to Home", class_="btn-outline-secondary w-100 mt-2"),
-        ui.hr(),
-        ui.markdown("""
-        #### How to Interact:
-        1. **Search** for a protein.
-        2. **Double-click** a node to:
-           - **Focus:** New search from here.
-           - **Expand:** Add neighbors to graph.
-           - **Delete:** Remove node.
-        """)
+        ui.hr(style="margin: 10px 0;"),
+        ui.div(
+            ui.markdown("#### Subnetwork Search"),
+            ui.input_select(
+                "dataset", 
+                "Select Dataset:", 
+                choices=DATASET_ABBR,
+                selected="huri"
+            ),
+            ui.input_text("query_gene", "Gene Symbol:", placeholder="e.g., CALM2"),
+            ui.div(
+                ui.input_action_button("submit", "Search", class_="btn-primary btn-sm w-100"),
+                ui.input_action_button("reset", "Reset", class_="btn-outline-secondary btn-sm w-100 mt-1"),
+            ),
+            style="margin-bottom: 10px;"
+        ),
+        ui.hr(style="margin: 10px 0;"),
+        ui.tags.small(
+            ui.markdown("""
+**How to Interact:**
+1. **Search** for a protein.
+2. **Double-click** a node to:
+   - **Focus / Expand / Delete**
+""")
+        )
     ),
     ui.navset_card_pill(
         ui.nav_panel(
@@ -39,6 +47,14 @@ app_ui = ui.page_sidebar(
             )
         ),
         ui.nav_panel(
+            "Global Results",
+            ui.card(
+                ui.card_header("Search Results Across All Datasets"),
+                ui.output_ui("global_search_results_ui"),
+                ui.div(ui.input_action_button("hidden_jump_btn", "hidden"), style="display:none;")
+            )
+        ),
+        ui.nav_panel(
             "Subnetwork",
             ui.output_ui("subnetwork_stats_ui"),
             ui.card(
@@ -49,22 +65,49 @@ app_ui = ui.page_sidebar(
             ui.card(
                 ui.card_header("Interaction Table"),
                 ui.div(
-                    ui.div(
-                        ui.input_text("filter_text", "Filter current table:", placeholder="Type to filter..."),
-                        style="width: 300px; margin-bottom: 0;"
-                    ),
-                    ui.div(
-                        ui.input_action_button("filter_submit", "Apply Filter", class_="btn-primary", style="height: 38px;"),
-                        style="margin-left: 10px; align-self: flex-end; margin-bottom: 16px;"
-                    ),
-                    style="display: flex; align-items: flex-end; justify-content: flex-start;"
-                ),
-                ui.div(
-                    ui.download_button("download_edges", "Download Edges (CSV)", class_="btn-outline-primary btn-sm me-2"),
-                    ui.download_button("download_nodes", "Download Nodes (CSV)", class_="btn-outline-secondary btn-sm me-2"),
-                    style="margin: 8px 0;"
+                    ui.tags.label("Filter current table:", class_="mb-0 me-2", style="white-space: nowrap; font-weight: 500;"),
+                    ui.input_text("filter_text", None, placeholder="Type to filter..."),
+                    ui.input_action_button("filter_submit", "Apply Filter", class_="btn-primary ms-2"),
+                    class_="d-flex align-items-center mb-4 inline-filter"
                 ),
                 ui.output_ui("interaction_table_ui")
+            )
+        ),
+        ui.nav_panel(
+            "Merged Network",
+            ui.card(
+                ui.card_header("Global Network Search (Across all datasets)"),
+                ui.layout_columns(
+                    ui.input_text_area(
+                        "merged_query",
+                        "Gene Symbol(s):",
+                        placeholder="Single: CALM2\nMultiple: TP53, BRCA1, BRCA2",
+                        rows=4
+                    ),
+                    ui.div(
+                        ui.input_action_button("merged_submit", "Search Global Network", class_="btn-primary w-100"),
+                        ui.HTML("""
+<div class="mt-2 text-muted" style="font-size: 0.85em;">
+    <ul class="mb-0 ps-3">
+        <li><strong>Single gene:</strong> Shows all direct neighbors across all databases.</li>
+        <li><strong>Multiple genes:</strong> Shows connections <em>among</em> input genes across all databases.</li>
+    </ul>
+</div>
+"""),
+                    ),
+                    col_widths=[8, 4],
+                    align="end"
+                )
+            ),
+            ui.output_ui("merged_stats_ui"),
+            ui.card(
+                ui.card_header("Global Interactive Visualization (Edges colored by source)"),
+                ui.output_ui("merged_graph_container"),
+                full_screen=True
+            ),
+            ui.card(
+                ui.card_header("Global Interaction Table"),
+                ui.output_ui("merged_table_ui")
             )
         ),
         ui.nav_panel(
@@ -75,11 +118,7 @@ app_ui = ui.page_sidebar(
                     ui.input_select(
                         "genelist_dataset",
                         "Dataset:",
-                        choices={
-                            "huri": "HuRI PPI",
-                            "bioplex_293": "BioPlex HEK 293T",
-                            "bioplex_hct116": "BioPlex HCT116"
-                        },
+                        choices=DATASET_ABBR,
                         selected="huri"
                     ),
                     ui.input_text_area(
