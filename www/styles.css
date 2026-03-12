@@ -1,0 +1,121 @@
+/* Custom CSS for PPI Subnetwork Explorer */
+
+.interaction-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0;
+    font-size: 0.9em;
+    font-family: sans-serif;
+    min-width: 400px;
+}
+
+.interaction-table thead tr {
+    background-color: #009879;
+    color: #ffffff;
+}
+
+.interaction-table th {
+    padding: 12px 15px;
+    text-align: center; /* Center align headers */
+    vertical-align: middle;
+}
+
+.interaction-table td {
+    padding: 12px 15px;
+    text-align: right; /* Right align content */
+    vertical-align: middle;
+    white-space: nowrap; /* Prevent ID wrapping */
+}
+
+.interaction-table tbody tr {
+    border-bottom: 1px solid #dddddd;
+}
+
+.interaction-table tbody tr:nth-of-type(even) {
+    background-color: #f3f3f3;
+}
+
+.interaction-table tbody tr:last-of-type {
+    border-bottom: 2px solid #009879;
+}
+
+/* Ensure links are readable against the table background */
+.interaction-table a {
+    color: #007bff;
+    text-decoration: none;
+}
+
+.interaction-table a:hover {
+    text-decoration: underline;
+}
+
+/* Specific styling for the table container */
+.table-container {
+    overflow-x: auto;
+    border-radius: 5px;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+}
+
+/* Highlight for differing original symbols */
+.diff-symbol {
+    color: #d9534f;
+    font-weight: bold;
+    background-color: #f9f2f4;
+    border-radius: 4px;
+    padding: 2px 4px;
+}
+
+/* Styling for MultiIndex headers in Interaction Table */
+.interaction-table {
+    border-collapse: separate !important;
+    border-spacing: 0;
+    border: 1px solid #dee2e6;
+}
+
+.interaction-table thead tr:first-child th {
+    padding: 10px;
+    font-size: 1.1em;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-bottom: 2px solid #ffffff;
+}
+
+/* Partner A Group Header (Blue Theme) */
+.interaction-table thead tr:first-child th:nth-child(1) {
+    background-color: #0056b3 !important;
+    color: #ffffff !important;
+}
+
+/* Partner B Group Header (Green Theme) */
+.interaction-table thead tr:first-child th:nth-child(2) {
+    background-color: #28a745 !important;
+    color: #ffffff !important;
+    border-left: 2px solid #ffffff;
+}
+
+/* Second row of headers (Sub-labels) */
+.interaction-table thead tr:nth-child(2) th {
+    background-color: #f8f9fa;
+    color: #495057;
+    font-weight: 600;
+    border-bottom: 2px solid #dee2e6;
+}
+
+/* Add a vertical separator in the body between A and B */
+/* This is a bit of a hack since column counts vary, 
+   but we can style the 'Partner B' header row to have a border */
+.interaction-table td {
+    border-bottom: 1px solid #eee;
+}
+
+/* Center all headers */
+.interaction-table th {
+    text-align: center !important;
+}
+
+/* Hover effect */
+.interaction-table tbody tr:hover {
+    background-color: #f1f3f5 !important;
+}
+
