@@ -290,11 +290,16 @@ def server(input, output, session: Session):
         if not roots: return None
         df = GLOBAL_DATA.get(input.dataset())
         if df is None: return None
-        all_results = [data_loader.get_neighbors(df, r) for r in roots]
-        combined = pd.concat(all_results).drop_duplicates()
-        if deleted:
-            combined = combined[~combined['from'].isin(deleted) & ~combined['to'].isin(deleted)]
-        return combined
+        
+        # Get the full subnetwork (roots, neighbors, and all links among them)
+        final_df = data_loader.get_subnetwork(df, roots)
+        
+        if not final_df.empty and deleted:
+            deleted_upper = {str(d).strip().upper() for d in deleted}
+            mask = ~final_df['from'].str.upper().isin(deleted_upper) & ~final_df['to'].str.upper().isin(deleted_upper)
+            final_df = final_df[mask]
+            
+        return final_df
 
     @output
     @render.ui
@@ -496,12 +501,8 @@ def server(input, output, session: Session):
         for ds_key, df in GLOBAL_DATA.items():
             gene_set = set(genes)
             if len(genes) == 1:
-                # Single protein: Show all neighbors
-                query = genes[0]
-                mask = (df['from'].str.upper() == query) | (df['to'].str.upper() == query)
-                if 'original_from' in df.columns: mask |= (df['original_from'].str.upper() == query)
-                if 'original_to' in df.columns: mask |= (df['original_to'].str.upper() == query)
-                sub_df = df[mask].copy()
+                # Single protein: Show all neighbors and links among them
+                sub_df = data_loader.get_subnetwork(df, genes).copy()
             else:
                 # Multiple proteins: Show connections among them
                 mask_from = df['from'].str.upper().isin(gene_set)

@@ -32,7 +32,7 @@ def generate_static_html(gene_symbol, dataset_key, output_filename=None):
     df = data_loader.load_ppi_data(str(data_path), str(MAP_FILE))
 
     print(f"Finding neighbors for {gene_symbol}...")
-    sub_df = data_loader.get_neighbors(df, gene_symbol)
+    sub_df = data_loader.get_subnetwork(df, [gene_symbol])
 
     if sub_df.empty:
         print(f"No interactions found for {gene_symbol} in {dataset_key}.")
