@@ -27,7 +27,7 @@ async def graph_api_endpoint(request: Request):
         return HTMLResponse(f"Dataset '{dataset_key}' not found. Available: {list(config.GLOBAL_DATA.keys())}", status_code=404)
         
     df = config.GLOBAL_DATA[dataset_key]
-    sub_df = data_loader.get_neighbors(df, gene_symbol)
+    sub_df = data_loader.get_subnetwork(df, [gene_symbol])
     
     if sub_df.empty:
         return HTMLResponse(f"No interactions found for {gene_symbol} in {dataset_key}", status_code=404)

@@ -40,11 +40,17 @@ def create_merged_graph(edge_df, root_genes, height="600px"):
       "nodes": { "font": { "size": 18 }, "borderWidth": 2 },
       "edges": { "smooth": false },
       "physics": {
-        "forceAtlas2Based": { "gravitationalConstant": -50, "centralGravity": 0.01, "springLength": 100, "springConstant": 0.08, "avoidOverlap": 1 },
+        "forceAtlas2Based": { 
+            "gravitationalConstant": -50, 
+            "centralGravity": 0.01, 
+            "springLength": 100, 
+            "springConstant": 0.12, 
+            "avoidOverlap": 1 
+        },
         "solver": "forceAtlas2Based",
-        "stabilization": { "enabled": true, "iterations": 200 }
+        "stabilization": { "enabled": true, "iterations": 500 }
       },
-      "interaction": { "hover": true, "navigationButtons": false }
+      "interaction": { "hover": true, "navigationButtons": true }
     }
     """
     net.set_options(options)
@@ -78,7 +84,10 @@ def create_merged_graph(edge_df, root_genes, height="600px"):
         var checkNetwork = setInterval(function() {
             if (typeof network !== 'undefined') {
                 clearInterval(checkNetwork);
-                network.on("stabilizationIterationsDone", function () { network.fit(); });
+                network.on("stabilizationIterationsDone", function () { 
+                    network.fit(); 
+                    network.stopSimulation(); 
+                });
                 setTimeout(function() { network.fit(); }, 500);
             }
         }, 100);
@@ -327,18 +336,18 @@ def create_subnetwork_graph(sub_df, root_genes, height="100%", filtered_df=None)
           "gravitationalConstant": -50,
           "centralGravity": 0.01,
           "springLength": 100,
-          "springConstant": 0.08,
+          "springConstant": 0.12,
           "avoidOverlap": 1
         },
         "solver": "forceAtlas2Based",
         "stabilization": {
           "enabled": true,
-          "iterations": 200,
+          "iterations": 500,
           "updateInterval": 25
         }
       },
       "interaction": {
-        "navigationButtons": false,
+        "navigationButtons": true,
         "hover": true,
         "hideEdgesOnDrag": true,
         "hideNodesOnDrag": false
@@ -487,9 +496,10 @@ def create_subnetwork_graph(sub_df, root_genes, height="100%", filtered_df=None)
             if (typeof network !== 'undefined') {
                 clearInterval(checkNetwork);
                 
-                // Auto-fit the network once stabilized
+                // Auto-fit and stop the network once stabilized
                 network.on("stabilizationIterationsDone", function () {
                     network.fit();
+                    network.stopSimulation();
                 });
                 
                 // Also fit after a short delay just in case

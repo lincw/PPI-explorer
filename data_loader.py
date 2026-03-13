@@ -126,6 +126,39 @@ def get_neighbors(df, query_gene):
         
     return df[mask]
 
+def get_subnetwork(df, roots):
+    """
+    Returns all interactions among the roots and their first-degree neighbors.
+    This includes root-neighbor AND neighbor-neighbor interactions.
+    """
+    if not roots:
+        return pd.DataFrame(columns=df.columns)
+        
+    if isinstance(roots, (str, set)):
+        roots = list(roots)
+    
+    # 1. Get all edges connected to roots
+    all_results = [get_neighbors(df, r) for r in roots]
+    combined = pd.concat(all_results).drop_duplicates()
+    
+    if combined.empty:
+        return combined
+        
+    # 2. Identify all nodes in this 1st-degree neighborhood
+    # Use the symbols as they appear in the dataset
+    all_nodes = pd.concat([combined['from'], combined['to']]).unique()
+    all_nodes_set = set(all_nodes)
+    
+    # Add roots explicitly to ensure they are included
+    for r in roots:
+        all_nodes_set.add(str(r).strip())
+        
+    # 3. Find ALL edges in the dataset where BOTH participants are in our node set
+    mask = df['from'].isin(all_nodes_set) & df['to'].isin(all_nodes_set)
+    final_df = df[mask].drop_duplicates()
+    
+    return final_df
+
 def get_summary_stats(df):
     """
     Calculates summary statistics for the PPI dataset.

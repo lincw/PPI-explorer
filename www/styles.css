@@ -143,8 +143,60 @@
     margin-bottom: 0 !important;
 }
 
-/* Hover effect */
-.interaction-table tbody tr:hover {
-    background-color: #f1f3f5 !important;
+/* Floating Sticky Note */
+#sticky-note-container {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    width: 250px;
+    height: 200px;
+    background-color: #fef68c;
+    border: 1px solid #e6db55;
+    box-shadow: 3px 3px 10px rgba(0,0,0,0.2);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    border-radius: 4px;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+#sticky-note-header {
+    padding: 5px 10px;
+    cursor: move;
+    background-color: #f7eb4d;
+    border-bottom: 1px solid #e6db55;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: bold;
+    font-size: 0.85em;
+    color: #857a00;
+    user-select: none;
+}
+
+#sticky-note-content {
+    flex-grow: 1;
+    border: none;
+    background-color: transparent;
+    padding: 10px;
+    resize: none;
+    font-size: 0.9em;
+    outline: none;
+    color: #333;
+}
+
+#sticky-note-content::placeholder {
+    color: #a39a2e;
+    font-style: italic;
+}
+
+.sticky-note-close {
+    cursor: pointer;
+    font-size: 1.2em;
+    line-height: 1;
+}
+
+.sticky-note-close:hover {
+    color: #000;
 }
 
