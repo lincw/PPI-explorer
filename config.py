@@ -19,7 +19,8 @@ DATASETS = {
     "bioplex_hct116": DATA_DIR / "bioplex_hct116.tsv",
     "pancov": DATA_DIR / "v2_edge.xlsx",
     "husci": DATA_DIR / "HuSCI_PPIs.xlsx",
-    "bacterial": DATA_DIR / "bacterial_ppi.xlsx"
+    "bacterial": DATA_DIR / "bacterial_ppi.xlsx",
+    "intact": DATA_DIR / "intact_human_physical_hq_20260217.csv"
 }
 
 # Official Display Names
@@ -29,7 +30,8 @@ DATASET_ABBR = {
     "bioplex_hct116": "BioPlex_HCT116",
     "pancov": "Pan-coronavirus",
     "husci": "HuSCI",
-    "bacterial": "HuMMI"
+    "bacterial": "HuMMI",
+    "intact": "IntAct"
 }
 
 DATASET_FULL = {
@@ -39,6 +41,7 @@ DATASET_FULL = {
     "pancov": "Pan-coronavirus",
     "husci": "SARS-CoV-2-Human Contactome, HuSCI",
     "bacterial": "The Human-Microbiome Meta-Interactome, HuMMI",
+    "intact": "IntAct Human Physical HQ Interactome (2026-02-17)",
     "mygene": "Human gene nomenclature (MyGene.info)"
 }
 
@@ -69,7 +72,8 @@ DATASET_COLORS = {
     "bioplex_hct116": "#2ecc71", # Green
     "pancov": "#f1c40f",      # Yellow
     "husci": "#9b59b6",       # Purple
-    "bacterial": "#e67e22"    # Orange
+    "bacterial": "#e67e22",   # Orange
+    "intact": "#16a085"       # Deep Teal
 }
 
 # Global Data Cache

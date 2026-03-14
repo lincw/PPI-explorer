@@ -50,7 +50,13 @@ def create_merged_graph(edge_df, root_genes, height="600px"):
         "solver": "forceAtlas2Based",
         "stabilization": { "enabled": true, "iterations": 500 }
       },
-      "interaction": { "hover": true, "navigationButtons": true }
+      "interaction": {
+        "navigationButtons": true,
+        "hover": true,
+        "dragNodes": true,
+        "hideEdgesOnDrag": false,
+        "hideNodesOnDrag": false
+      }
     }
     """
     net.set_options(options)
@@ -67,7 +73,7 @@ def create_merged_graph(edge_df, root_genes, height="600px"):
     <style>
         .export-controls { position: absolute; top: 10px; right: 10px; z-index: 1000; display: flex; gap: 5px; }
         .export-btn { padding: 5px 10px; background-color: #f8f9fa; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; font-family: sans-serif; font-size: 12px; }
-    </small>
+    </style>
     <div class="export-controls">
         <button class="export-btn" onclick="downloadPNG()">PNG</button>
     </div>
@@ -88,6 +94,12 @@ def create_merged_graph(edge_df, root_genes, height="600px"):
                     network.fit(); 
                     network.stopSimulation(); 
                 });
+                
+                // When dragging starts, disable physics to keep node fixed
+                network.on("dragStart", function() {
+                    network.setOptions({ physics: { enabled: false } });
+                });
+                
                 setTimeout(function() { network.fit(); }, 500);
             }
         }, 100);
@@ -134,20 +146,21 @@ def create_gene_list_graph(df, gene_list):
           "gravitationalConstant": -50,
           "centralGravity": 0.01,
           "springLength": 100,
-          "springConstant": 0.08,
+          "springConstant": 0.12,
           "avoidOverlap": 1
         },
         "solver": "forceAtlas2Based",
         "stabilization": {
           "enabled": true,
-          "iterations": 200,
+          "iterations": 500,
           "updateInterval": 25
         }
       },
       "interaction": {
         "navigationButtons": true,
         "hover": true,
-        "hideEdgesOnDrag": true
+        "dragNodes": true,
+        "hideEdgesOnDrag": false
       }
     }
     """
@@ -272,6 +285,18 @@ def create_gene_list_graph(df, gene_list):
 
         pdf.save("ppi_graph.pdf");
     }
+    (function() {
+        var checkNetwork = setInterval(function() {
+            if (typeof network !== 'undefined') {
+                clearInterval(checkNetwork);
+                
+                // When dragging starts, disable physics to keep node fixed
+                network.on("dragStart", function() {
+                    network.setOptions({ physics: { enabled: false } });
+                });
+            }
+        }, 100);
+    })();
     </script>
     """
     new_html = html_content.replace("</body>", injection + "</body>")
@@ -349,7 +374,8 @@ def create_subnetwork_graph(sub_df, root_genes, height="100%", filtered_df=None)
       "interaction": {
         "navigationButtons": true,
         "hover": true,
-        "hideEdgesOnDrag": true,
+        "dragNodes": true,
+        "hideEdgesOnDrag": false,
         "hideNodesOnDrag": false
       }
     }
@@ -504,6 +530,11 @@ def create_subnetwork_graph(sub_df, root_genes, height="100%", filtered_df=None)
                 
                 // Also fit after a short delay just in case
                 setTimeout(function() { network.fit(); }, 500);
+
+                // When dragging starts, disable physics to keep node fixed
+                network.on("dragStart", function() {
+                    network.setOptions({ physics: { enabled: false } });
+                });
 
                 network.on("doubleClick", function (params) {
                     if (params.nodes.length > 0) {

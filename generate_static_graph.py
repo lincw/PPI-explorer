@@ -16,7 +16,11 @@ def generate_static_html(gene_symbol, dataset_key, output_filename=None):
     DATASETS = {
         "huri": DATA_DIR / "huri_ppi.csv",
         "bioplex_293": DATA_DIR / "bioplex_293.tsv",
-        "bioplex_hct116": DATA_DIR / "bioplex_hct116.tsv"
+        "bioplex_hct116": DATA_DIR / "bioplex_hct116.tsv",
+        "pancov": DATA_DIR / "v2_edge.xlsx",
+        "husci": DATA_DIR / "HuSCI_PPIs.xlsx",
+        "bacterial": DATA_DIR / "bacterial_ppi.xlsx",
+        "intact": DATA_DIR / "intact_human_physical_hq_20260217.csv"
     }
 
     if dataset_key not in DATASETS:
