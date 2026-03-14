@@ -50,6 +50,18 @@ def load_ppi_data(file_path, map_file_path=None, **kwargs):
         df = df.rename(columns={'Effector Abbreviation': 'from', 'Human protein symbol': 'to'})
         df['original_from'] = df['from']
         df['original_to'] = df['to']
+    elif 'symbol_from' in df.columns and 'symbol_to' in df.columns:
+        # IntAct human physical HQ format
+        df = df.rename(columns={'symbol_from': 'from', 'symbol_to': 'to'})
+        # Also map the enriched columns if they exist in this specific format
+        enriched_map = {
+            'uniprot_from': 'from_uniprot', 'uniprot_to': 'to_uniprot',
+            'entrez_from': 'from_entrez', 'entrez_to': 'to_entrez',
+            'ensembl_from': 'from_ensembl', 'ensembl_to': 'to_ensembl'
+        }
+        df = df.rename(columns=enriched_map)
+        df['original_from'] = df['from']
+        df['original_to'] = df['to']
     elif 'from' not in df.columns or 'to' not in df.columns:
         # Generic rename for other formats
         rename_map = {
