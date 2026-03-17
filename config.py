@@ -20,8 +20,12 @@ DATASETS = {
     "pancov": DATA_DIR / "v2_edge.xlsx",
     "husci": DATA_DIR / "HuSCI_PPIs.xlsx",
     "bacterial": DATA_DIR / "bacterial_ppi.xlsx",
-    "intact": DATA_DIR / "intact_human_physical_hq_20260217.csv"
+    "intact": DATA_DIR / "intact_human_physical_hq_20260217.csv",
+    "omnipath": DATA_DIR / "human_pkn_20260223.tsv"
 }
+
+# Directed network datasets
+DIRECTED_DATASETS = {"omnipath"}
 
 # Official Display Names
 DATASET_ABBR = {
@@ -31,7 +35,8 @@ DATASET_ABBR = {
     "pancov": "Pan-coronavirus",
     "husci": "HuSCI",
     "bacterial": "HuMMI",
-    "intact": "IntAct"
+    "intact": "IntAct",
+    "omnipath": "OmniPath PKN"
 }
 
 DATASET_FULL = {
@@ -42,6 +47,7 @@ DATASET_FULL = {
     "husci": "SARS-CoV-2-Human Contactome, HuSCI",
     "bacterial": "The Human-Microbiome Meta-Interactome, HuMMI",
     "intact": "IntAct Human Physical HQ Interactome (2026-02-17)",
+    "omnipath": "OmniPath Prior Knowledge Network (Directed)",
     "mygene": "Human gene nomenclature (MyGene.info)"
 }
 
@@ -73,7 +79,8 @@ DATASET_COLORS = {
     "pancov": "#f1c40f",      # Yellow
     "husci": "#9b59b6",       # Purple
     "bacterial": "#e67e22",   # Orange
-    "intact": "#16a085"       # Deep Teal
+    "intact": "#16a085",      # Deep Teal
+    "omnipath": "#34495e"     # Wet Asphalt
 }
 
 # Global Data Cache

@@ -4,7 +4,7 @@ import os
 import shutil
 import data_loader
 import graph_utils
-from config import GLOBAL_DATA, DATASET_ABBR, STATIC_DIR
+from config import GLOBAL_DATA, DATASET_ABBR, DIRECTED_DATASETS, STATIC_DIR
 
 def subnetwork_server(input, output, session, session_id, root_genes, deleted_nodes, pending_gene):
     
@@ -16,6 +16,7 @@ def subnetwork_server(input, output, session, session_id, root_genes, deleted_no
             root_genes.set({gene})
             deleted_nodes.set(set())
             ui.update_text("filter_text", value="")
+            ui.update_navset("main_tabs", selected="Subnetwork")
 
     @reactive.Effect
     @reactive.event(input.reset)
@@ -150,7 +151,8 @@ def subnetwork_server(input, output, session, session_id, root_genes, deleted_no
         roots = root_genes()
         # Include applied filter in slug to differentiate cached files
         slug = f"{input.dataset()}_{str(hash(tuple(sorted(list(roots)))))[:10]}_{str(hash(filter_val))[:6]}"
-        graph_file_path = graph_utils.create_subnetwork_graph(df, roots, height="600px", filtered_df=active_filtered_df)
+        is_directed = input.dataset() in DIRECTED_DATASETS
+        graph_file_path = graph_utils.create_subnetwork_graph(df, roots, height="600px", filtered_df=active_filtered_df, directed=is_directed)
         
         if graph_file_path and os.path.exists(graph_file_path):
             unique_filename = f"ppi_subnetwork_{session_id}_{slug}.html"
@@ -192,20 +194,25 @@ def subnetwork_server(input, output, session, session_id, root_genes, deleted_no
                 return f'<span class="diff-symbol" title="Original: {orig}, Current: {curr}">{orig}</span>'
             return orig
 
+        # Detect non-human proteins (no Ensembl mapping) before columns are transformed
+        from_is_human = display_df['from_ensembl'].notna() if 'from_ensembl' in display_df.columns else pd.Series(True, index=display_df.index)
+        to_is_human = display_df['to_ensembl'].notna() if 'to_ensembl' in display_df.columns else pd.Series(True, index=display_df.index)
+
         for col in ['from_ensembl', 'to_ensembl']:
             display_df[col] = display_df[col].apply(make_ensembl_link)
         for col in ['from_uniprot', 'to_uniprot']:
             display_df[col] = display_df[col].apply(make_uniprot_link)
         for col in ['from_entrez', 'to_entrez']:
             display_df[col] = display_df[col].apply(make_entrez_link)
-        
+
         if 'original_from' in display_df.columns:
             display_df['original_from'] = display_df.apply(lambda x: highlight_diff(x['original_from'], x['from']), axis=1)
         if 'original_to' in display_df.columns:
             display_df['original_to'] = display_df.apply(lambda x: highlight_diff(x['original_to'], x['to']), axis=1)
 
-        for col in ['from', 'to']:
-            display_df[col] = display_df[col].apply(make_hgnc_link)
+        # Only link to HGNC for human proteins; show plain text for viral/bacterial
+        display_df.loc[from_is_human, 'from'] = display_df.loc[from_is_human, 'from'].apply(make_hgnc_link)
+        display_df.loc[to_is_human, 'to'] = display_df.loc[to_is_human, 'to'].apply(make_hgnc_link)
 
         # Create MultiIndex for clearer grouping
         final_cols = []
@@ -236,6 +243,10 @@ def subnetwork_server(input, output, session, session_id, root_genes, deleted_no
         col_tuples.append(('Partner B', 'Ensembl'))
         final_cols.append('to_uniprot')
         col_tuples.append(('Partner B', 'UniProt'))
+
+        if 'interaction' in display_df.columns:
+            final_cols.append('interaction')
+            col_tuples.append(('Info', 'Interaction'))
 
         display_df = display_df[final_cols]
         display_df.columns = pd.MultiIndex.from_tuples(col_tuples)

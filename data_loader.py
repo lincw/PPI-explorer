@@ -74,6 +74,12 @@ def load_ppi_data(file_path, map_file_path=None, **kwargs):
     cols_to_keep = ['from', 'to']
     if 'original_from' in df.columns: cols_to_keep.append('original_from')
     if 'original_to' in df.columns: cols_to_keep.append('original_to')
+    # Keep interaction column only if it carries meaningful info (e.g. stimulation/inhibition)
+    # Drop it if it just restates the edge (e.g. "A (interacts with) B")
+    if 'interaction' in df.columns:
+        sample = df['interaction'].dropna().head(1)
+        if not sample.empty and 'interacts with' not in str(sample.iloc[0]):
+            cols_to_keep.append('interaction')
     
     # Check if we already have enriched columns
     enriched_cols = ['from_entrez', 'to_entrez', 'from_ensembl', 'to_ensembl', 'from_uniprot', 'to_uniprot']
@@ -123,18 +129,34 @@ def get_neighbors(df, query_gene):
     """
     Returns a sub-DataFrame containing all interactions involving the query_gene.
     Matches against both current and original gene symbols if available.
+    Supports complex identifiers by checking for the gene within underscore-separated names.
     """
     # Case-insensitive search
     query_gene = str(query_gene).strip().upper()
     
+    # Use regex with word boundaries (including underscore) to match gene within complexes
+    # In many protein datasets, underscores are used as delimiters in complexes
+    # This pattern matches query_gene as a whole word OR as a part of an underscore-separated name
+    pattern = rf'\b{query_gene}\b'
+    
     # Base masks for current symbols
-    mask = (df['from'].str.upper() == query_gene) | (df['to'].str.upper() == query_gene)
+    # Note: .str.contains with regex is more flexible for OmniPath-style complexes
+    # We use a custom function if speed is an issue, but for typical subnetwork sizes it's fine.
+    
+    def matches_gene(s):
+        if not isinstance(s, str): return False
+        s_upper = s.upper()
+        # Direct match or match within complex (separated by _)
+        if s_upper == query_gene: return True
+        return query_gene in s_upper.split('_')
+
+    mask = df['from'].apply(matches_gene) | df['to'].apply(matches_gene)
     
     # Also check original symbols if they exist in the dataframe
     if 'original_from' in df.columns:
-        mask |= (df['original_from'].str.upper() == query_gene)
+        mask |= df['original_from'].apply(matches_gene)
     if 'original_to' in df.columns:
-        mask |= (df['original_to'].str.upper() == query_gene)
+        mask |= df['original_to'].apply(matches_gene)
         
     return df[mask]
 
@@ -165,8 +187,17 @@ def get_subnetwork(df, roots):
     for r in roots:
         all_nodes_set.add(str(r).strip())
         
-    # 3. Find ALL edges in the dataset where BOTH participants are in our node set
-    mask = df['from'].isin(all_nodes_set) & df['to'].isin(all_nodes_set)
+    # 3. Find ALL edges in the dataset where BOTH participants are "connected" to our node set
+    # A node is "connected" if it is in the set OR if it's a complex containing a member from the set
+    
+    def is_in_node_set(s):
+        if not isinstance(s, str): return False
+        s_upper = s.upper()
+        if s_upper in all_nodes_set: return True
+        # Check if any member of the complex is in the set
+        return any(part in all_nodes_set for part in s_upper.split('_'))
+
+    mask = df['from'].apply(is_in_node_set) & df['to'].apply(is_in_node_set)
     final_df = df[mask].drop_duplicates()
     
     return final_df

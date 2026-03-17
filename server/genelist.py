@@ -5,7 +5,7 @@ import shutil
 import data_loader
 import graph_utils
 import re
-from config import GLOBAL_DATA, STATIC_DIR
+from config import GLOBAL_DATA, DIRECTED_DATASETS, STATIC_DIR
 
 def genelist_server(input, output, session, session_id):
     genelist_genes = reactive.Value([])
@@ -74,7 +74,8 @@ def genelist_server(input, output, session, session_id):
         if not genes: return ui.div("Enter gene symbols and click 'Find Connections'.", class_="text-muted")
         df = GLOBAL_DATA.get(input.genelist_dataset())
         if df is None: return ui.div("Dataset not available.", class_="alert alert-warning")
-        graph_file_path = graph_utils.create_gene_list_graph(df, genes)
+        is_directed = input.genelist_dataset() in DIRECTED_DATASETS
+        graph_file_path = graph_utils.create_gene_list_graph(df, genes, directed=is_directed)
         if graph_file_path and os.path.exists(graph_file_path):
             slug = f"genelist_{input.genelist_dataset()}_{hash(tuple(sorted(genes)))}"
             unique_filename = f"ppi_genelist_{session_id}_{slug}.html"
@@ -126,20 +127,25 @@ def genelist_server(input, output, session, session_id):
             if pd.isna(symbol) or str(symbol).strip() == "": return "-"
             return f'<a href="https://www.genenames.org/data/gene-symbol-report/#!/hgnc_id/{symbol}" target="_blank">{symbol}</a>'
 
+        # Detect non-human proteins before columns are transformed
+        from_is_human = display_df['from_ensembl'].notna() if 'from_ensembl' in display_df.columns else pd.Series(True, index=display_df.index)
+        to_is_human = display_df['to_ensembl'].notna() if 'to_ensembl' in display_df.columns else pd.Series(True, index=display_df.index)
+
         for col in ['from_ensembl', 'to_ensembl']:
             display_df[col] = display_df[col].apply(make_ensembl_link)
         for col in ['from_uniprot', 'to_uniprot']:
             display_df[col] = display_df[col].apply(make_uniprot_link)
         for col in ['from_entrez', 'to_entrez']:
             display_df[col] = display_df[col].apply(make_entrez_link)
-            
-        for col in ['from', 'to']:
-            display_df[col] = display_df[col].apply(make_hgnc_link)
-        
+
+        # Only link to HGNC for human proteins; show plain text for viral/bacterial
+        display_df.loc[from_is_human, 'from'] = display_df.loc[from_is_human, 'from'].apply(make_hgnc_link)
+        display_df.loc[to_is_human, 'to'] = display_df.loc[to_is_human, 'to'].apply(make_hgnc_link)
+
         # Create MultiIndex for clearer grouping
         final_cols = []
         col_tuples = []
-        
+
         # Partner A group
         final_cols.append('from')
         col_tuples.append(('Partner A', 'Symbol'))
@@ -165,6 +171,10 @@ def genelist_server(input, output, session, session_id):
         col_tuples.append(('Partner B', 'Ensembl'))
         final_cols.append('to_uniprot')
         col_tuples.append(('Partner B', 'UniProt'))
+
+        if 'interaction' in display_df.columns:
+            final_cols.append('interaction')
+            col_tuples.append(('Info', 'Interaction'))
 
         display_df = display_df[final_cols]
         display_df.columns = pd.MultiIndex.from_tuples(col_tuples)

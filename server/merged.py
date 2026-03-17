@@ -111,20 +111,25 @@ def merged_server(input, output, session, session_id):
             if pd.isna(symbol) or str(symbol).strip() == "": return "-"
             return f'<a href="https://www.genenames.org/data/gene-symbol-report/#!/hgnc_id/{symbol}" target="_blank">{symbol}</a>'
 
+        # Detect non-human proteins before columns are transformed
+        from_is_human = display_df['from_ensembl'].notna() if 'from_ensembl' in display_df.columns else pd.Series(True, index=display_df.index)
+        to_is_human = display_df['to_ensembl'].notna() if 'to_ensembl' in display_df.columns else pd.Series(True, index=display_df.index)
+
         for col in ['from_ensembl', 'to_ensembl']:
             display_df[col] = display_df[col].apply(make_ensembl_link)
         for col in ['from_uniprot', 'to_uniprot']:
             display_df[col] = display_df[col].apply(make_uniprot_link)
         for col in ['from_entrez', 'to_entrez']:
             display_df[col] = display_df[col].apply(make_entrez_link)
-            
-        for col in ['from', 'to']:
-            display_df[col] = display_df[col].apply(make_hgnc_link)
+
+        # Only link to HGNC for human proteins; show plain text for viral/bacterial
+        display_df.loc[from_is_human, 'from'] = display_df.loc[from_is_human, 'from'].apply(make_hgnc_link)
+        display_df.loc[to_is_human, 'to'] = display_df.loc[to_is_human, 'to'].apply(make_hgnc_link)
 
         # Create MultiIndex for clearer grouping
         final_cols = []
         col_tuples = []
-        
+
         # Partner A group
         final_cols.append('from')
         col_tuples.append(('Partner A', 'Symbol'))

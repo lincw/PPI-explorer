@@ -111,7 +111,7 @@ def create_merged_graph(edge_df, root_genes, height="600px"):
         f.write(new_html)
     return tmp_file
 
-def create_gene_list_graph(df, gene_list):
+def create_gene_list_graph(df, gene_list, directed=False):
     """
     Creates a pyvis graph showing ONLY connections among the given gene_list.
     """
@@ -130,7 +130,7 @@ def create_gene_list_graph(df, gene_list):
         
     edge_df = df[mask_from & mask_to]
 
-    net = Network(height="600px", width="100%", notebook=False, directed=False)
+    net = Network(height="600px", width="100%", notebook=False, directed=directed)
     options = """
     var options = {
       "nodes": {
@@ -307,20 +307,21 @@ def create_gene_list_graph(df, gene_list):
     return tmp_file
 
 
-def create_subnetwork_graph(sub_df, root_genes, height="100%", filtered_df=None):
+def create_subnetwork_graph(sub_df, root_genes, height="100%", filtered_df=None, directed=False):
     """
     Creates a pyvis interactive network from the subnetwork DataFrame.
     root_genes: a list or set of genes to highlight as roots.
     filtered_df: if provided, edges in this df will be highlighted.
+    directed: if True, creates a directed graph with arrows.
     """
     if sub_df.empty:
         return None
-        
-    G = nx.Graph()
-    if isinstance(root_genes, str):
-        root_genes = {root_genes.strip().upper()}
+
+    G = nx.DiGraph() if directed else nx.Graph()
+    if isinstance(root_genes, (str, bytes)):
+        root_genes = {str(root_genes).strip().upper()}
     else:
-        root_genes = {str(g).strip().upper() for g in root_genes}
+        root_genes = {str(g).strip().upper() for g in root_genes if g}
     
     # Track nodes for color coding
     nodes = set()
@@ -337,12 +338,15 @@ def create_subnetwork_graph(sub_df, root_genes, height="100%", filtered_df=None)
     if filtered_df is not None and not filtered_df.empty:
         for _, row in filtered_df.iterrows():
             u, v = str(row['from']).strip().upper(), str(row['to']).strip().upper()
-            highlighted_edges.add(tuple(sorted((u, v))))
+            if directed:
+                highlighted_edges.add((u, v))
+            else:
+                highlighted_edges.add(tuple(sorted((u, v))))
             highlighted_nodes.add(u)
             highlighted_nodes.add(v)
-    
+
     # Initialize Pyvis Network with CDN resources
-    net = Network(height=height, width="100%", notebook=False, directed=False)
+    net = Network(height=height, width="100%", notebook=False, directed=directed)
     
     # Advanced options for performance and stability
     options = """
@@ -403,7 +407,10 @@ def create_subnetwork_graph(sub_df, root_genes, height="100%", filtered_df=None)
         
     # Add edges
     for u, v in G.edges():
-        is_highlighted = tuple(sorted((u, v))) in highlighted_edges
+        if directed:
+            is_highlighted = (u, v) in highlighted_edges
+        else:
+            is_highlighted = tuple(sorted((u, v))) in highlighted_edges
         color = "#e67e22" if is_highlighted else "#bdc3c7"
         width = 4 if is_highlighted else 1.2
         net.add_edge(u, v, color=color, width=width)

@@ -33,7 +33,8 @@ async def graph_api_endpoint(request: Request):
         return HTMLResponse(f"No interactions found for {gene_symbol} in {dataset_key}", status_code=404)
         
     # Generate the graph HTML
-    tmp_file = graph_utils.create_subnetwork_graph(sub_df, {gene_symbol})
+    is_directed = dataset_key in config.DIRECTED_DATASETS
+    tmp_file = graph_utils.create_subnetwork_graph(sub_df, {gene_symbol}, directed=is_directed)
     if not tmp_file or not os.path.exists(tmp_file):
         return HTMLResponse("Error generating graph", status_code=500)
         
