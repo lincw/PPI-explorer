@@ -8,6 +8,7 @@ from ui.global_results import global_results_ui
 from ui.subnetwork import subnetwork_ui
 from ui.merged import merged_ui
 from ui.genelist import genelist_ui
+from ui.custom_network import custom_network_ui
 from ui.settings import settings_ui
 
 app_ui = ui.page_sidebar(
@@ -18,6 +19,7 @@ app_ui = ui.page_sidebar(
         subnetwork_ui(),
         merged_ui(),
         genelist_ui(),
+        custom_network_ui(),
         settings_ui(),
         id="main_tabs"
     ),

@@ -55,7 +55,8 @@ def create_merged_graph(edge_df, root_genes, height="600px"):
         "hover": true,
         "dragNodes": true,
         "hideEdgesOnDrag": false,
-        "hideNodesOnDrag": false
+        "hideNodesOnDrag": false,
+        "multiselect": true
       }
     }
     """
@@ -160,7 +161,8 @@ def create_gene_list_graph(df, gene_list, directed=False):
         "navigationButtons": true,
         "hover": true,
         "dragNodes": true,
-        "hideEdgesOnDrag": false
+        "hideEdgesOnDrag": false,
+        "multiselect": true
       }
     }
     """
@@ -346,7 +348,10 @@ def create_subnetwork_graph(sub_df, root_genes, height="100%", filtered_df=None,
             highlighted_nodes.add(v)
 
     # Initialize Pyvis Network with CDN resources
-    net = Network(height=height, width="100%", notebook=False, directed=directed)
+    # If global directed is False, but any row has directed=True, 
+    # we MUST initialize Network(directed=True) to allow arrow rendering.
+    any_directed = directed or (not sub_df.empty and 'directed' in sub_df.columns and sub_df['directed'].any())
+    net = Network(height=height, width="100%", notebook=False, directed=any_directed)
     
     # Advanced options for performance and stability
     options = """
@@ -380,7 +385,8 @@ def create_subnetwork_graph(sub_df, root_genes, height="100%", filtered_df=None,
         "hover": true,
         "dragNodes": true,
         "hideEdgesOnDrag": false,
-        "hideNodesOnDrag": false
+        "hideNodesOnDrag": false,
+        "multiselect": true
       }
     }
     """
@@ -406,14 +412,27 @@ def create_subnetwork_graph(sub_df, root_genes, height="100%", filtered_df=None,
                      title=f"Double-click to {'expand' if is_root else 'focus/expand'} {node}")
         
     # Add edges
-    for u, v in G.edges():
-        if directed:
+    for _, row in sub_df.iterrows():
+        u, v = str(row['from']).strip().upper(), str(row['to']).strip().upper()
+        
+        # Determine if this specific edge is directed
+        # Priority: row['directed'] if exists, otherwise global 'directed' argument
+        is_edge_directed = row.get('directed', directed)
+        
+        if directed or any(sub_df.get('directed', [])): # If global or any local is directed
             is_highlighted = (u, v) in highlighted_edges
         else:
             is_highlighted = tuple(sorted((u, v))) in highlighted_edges
+            
         color = "#e67e22" if is_highlighted else "#bdc3c7"
         width = 4 if is_highlighted else 1.2
-        net.add_edge(u, v, color=color, width=width)
+        
+        # If the network is directed but this edge shouldn't be, we can't easily 
+        # remove arrows per-edge in pyvis if global directed=True without 
+        # using the 'arrows' attribute.
+        arrows = "to" if is_edge_directed else ""
+        
+        net.add_edge(u, v, color=color, width=width, arrows=arrows)
 
     # Store in a temporary HTML file
     tmp_dir = tempfile.gettempdir()

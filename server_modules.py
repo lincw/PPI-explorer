@@ -9,6 +9,7 @@ from server.global_search import global_search_server
 from server.subnetwork import subnetwork_server
 from server.merged import merged_server
 from server.genelist import genelist_server
+from server.custom_network import custom_network_server
 
 def server(input, output, session: Session):
     session_id = str(uuid.uuid4())[:8]
@@ -25,6 +26,7 @@ def server(input, output, session: Session):
     subnetwork_server(input, output, session, session_id, root_genes, deleted_nodes, pending_gene)
     merged_server(input, output, session, session_id)
     genelist_server(input, output, session, session_id)
+    custom_network_server(input, output, session, session_id)
 
     @output
     @render.text
@@ -33,7 +35,8 @@ def server(input, output, session: Session):
         input.clear_cache() 
         files = list(STATIC_DIR.glob("ppi_subnetwork_*.html")) + \
                 list(STATIC_DIR.glob("ppi_merged_*.html")) + \
-                list(STATIC_DIR.glob("ppi_genelist_*.html"))
+                list(STATIC_DIR.glob("ppi_genelist_*.html")) + \
+                list(STATIC_DIR.glob("ppi_custom_*.html"))
         count = len(files)
         size = sum(f.stat().st_size for f in files) / (1024 * 1024)
         return f"Current Cache: {count} temporary files ({size:.2f} MB)"
@@ -41,13 +44,9 @@ def server(input, output, session: Session):
     @reactive.Effect
     @reactive.event(input.clear_cache)
     def handle_clear_cache():
-        for p in STATIC_DIR.glob("ppi_subnetwork_*.html"):
-            try: p.unlink()
-            except: pass
-        for p in STATIC_DIR.glob("ppi_merged_*.html"):
-            try: p.unlink()
-            except: pass
-        for p in STATIC_DIR.glob("ppi_genelist_*.html"):
-            try: p.unlink()
-            except: pass
+        patterns = ["ppi_subnetwork_*.html", "ppi_merged_*.html", "ppi_genelist_*.html", "ppi_custom_*.html"]
+        for pattern in patterns:
+            for p in STATIC_DIR.glob(pattern):
+                try: p.unlink()
+                except: pass
         ui.notification_show("Cache cleared.", type="message")

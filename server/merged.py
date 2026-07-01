@@ -70,6 +70,24 @@ def merged_server(input, output, session, session_id):
             style="margin-bottom: 10px; border-left: 5px solid #3498db;"
         )
 
+    confirmed_large_merged = reactive.Value(False)
+
+    @reactive.Effect
+    @reactive.event(merged_genes)
+    def reset_merged_confirmation():
+        confirmed_large_merged.set(False)
+
+    @reactive.Effect
+    @reactive.event(input.merged_show_anyway)
+    def handle_merged_show_anyway():
+        confirmed_large_merged.set(True)
+
+    @reactive.Calc
+    def is_merged_too_large():
+        df = merged_data_full()
+        if df is None: return False
+        return len(df) > 1000 and not confirmed_large_merged()
+
     @output
     @render.ui
     def merged_graph_container():
@@ -78,6 +96,15 @@ def merged_server(input, output, session, session_id):
         if df is None or not genes: return ui.div("Enter gene symbol(s) and click Search.", class_="text-muted")
         if df.empty: return ui.div("No interactions found among these genes.", class_="alert alert-warning")
         
+        # Check for large network
+        if is_merged_too_large():
+            return ui.div(
+                ui.h4("Large Network Warning", class_="text-warning"),
+                ui.p(f"This network contains {len(df)} edges. The table is available below, but the interactive visualization is hidden to prevent browser slowness."),
+                ui.input_action_button("merged_show_anyway", "Visualize Anyway", class_="btn-warning"),
+                class_="alert alert-warning p-4 text-center my-4"
+            )
+
         graph_file_path = graph_utils.create_merged_graph(df, genes)
         if graph_file_path and os.path.exists(graph_file_path):
             slug = f"merged_{hash(tuple(sorted(genes)))}"

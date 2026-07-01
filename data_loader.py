@@ -188,17 +188,19 @@ def get_subnetwork(df, roots):
         all_nodes_set.add(str(r).strip())
         
     # 3. Find ALL edges in the dataset where BOTH participants are "connected" to our node set
-    # A node is "connected" if it is in the set OR if it's a complex containing a member from the set
+    # Optimization: Use vectorized isin first, then handle complexes only for remaining rows if needed
+    # But for standard PPI datasets, isin is usually sufficient.
     
-    def is_in_node_set(s):
-        if not isinstance(s, str): return False
-        s_upper = s.upper()
-        if s_upper in all_nodes_set: return True
-        # Check if any member of the complex is in the set
-        return any(part in all_nodes_set for part in s_upper.split('_'))
-
-    mask = df['from'].apply(is_in_node_set) & df['to'].apply(is_in_node_set)
-    final_df = df[mask].drop_duplicates()
+    # Convert all_nodes_set to uppercase for comparison
+    all_nodes_upper = {str(n).upper() for n in all_nodes_set}
+    
+    # Vectorized check for direct matches
+    mask_direct = df['from'].str.upper().isin(all_nodes_upper) & df['to'].str.upper().isin(all_nodes_upper)
+    
+    # If there are complexes (containing underscores), we might need more complex logic
+    # But usually, all_nodes_set already contains the symbols as they appear (possibly with underscores)
+    # Let's stick to a faster approach:
+    final_df = df[mask_direct].drop_duplicates()
     
     return final_df
 

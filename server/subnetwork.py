@@ -36,9 +36,9 @@ def subnetwork_server(input, output, session, session_id, root_genes, deleted_no
                 ui.p(f"What would you like to do with {gene}?"),
                 title="Node Interaction",
                 footer=ui.div(
-                    ui.input_action_button("btn_focus", "Focus on this Node", class_="btn-primary"),
-                    ui.input_action_button("btn_expand", "Expand Subnetwork", class_="btn-success"),
-                    ui.input_action_button("btn_delete", "Remove from View", class_="btn-danger"),
+                    ui.input_action_button("btn_focus", "Focus", class_="btn-primary"),
+                    ui.input_action_button("btn_expand", "Expand", class_="btn-success"),
+                    ui.input_action_button("btn_delete", "Remove", class_="btn-danger"),
                     ui.modal_button("Cancel"),
                     style="display: flex; gap: 5px; justify-content: flex-end;"
                 ),
@@ -135,6 +135,24 @@ def subnetwork_server(input, output, session, session_id, root_genes, deleted_no
         mask = df.apply(lambda row: row.astype(str).str.upper().str.contains(filter_val).any(), axis=1)
         return df[mask]
 
+    confirmed_large_subnetwork = reactive.Value(False)
+
+    @reactive.Effect
+    @reactive.event(root_genes, input.dataset)
+    def reset_confirmation():
+        confirmed_large_subnetwork.set(False)
+
+    @reactive.Effect
+    @reactive.event(input.subnetwork_show_anyway)
+    def handle_show_anyway():
+        confirmed_large_subnetwork.set(True)
+
+    @reactive.Calc
+    def is_too_large():
+        df = subnetwork_data_full()
+        if df is None: return False
+        return len(df) > 1000 and not confirmed_large_subnetwork()
+
     @output
     @render.ui
     def graph_container():
@@ -142,6 +160,15 @@ def subnetwork_server(input, output, session, session_id, root_genes, deleted_no
         if df is None: return ui.div("Search for a gene to begin.", class_="text-muted")
         if df.empty: return ui.div("No interactions to display.", class_="alert alert-warning")
         
+        # Check for large network
+        if is_too_large():
+            return ui.div(
+                ui.h4("Large Network Warning", class_="text-warning"),
+                ui.p(f"This subnetwork contains {len(df)} edges. The table is available below, but the interactive visualization is hidden to prevent browser slowness."),
+                ui.input_action_button("subnetwork_show_anyway", "Visualize Anyway", class_="btn-warning"),
+                class_="alert alert-warning p-4 text-center my-4"
+            )
+
         filter_val = applied_filter()
         filtered_df = filtered_data()
         

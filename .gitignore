@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Data datasets
+data/
+
+# Generated Pyvis HTML files
+www/static/ppi_*.html

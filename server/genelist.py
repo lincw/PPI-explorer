@@ -67,6 +67,24 @@ def genelist_server(input, output, session, session_id):
             style="margin-bottom: 10px; border-left: 5px solid #e67e22;"
         )
 
+    confirmed_large_genelist = reactive.Value(False)
+
+    @reactive.Effect
+    @reactive.event(genelist_genes, input.genelist_dataset)
+    def reset_genelist_confirmation():
+        confirmed_large_genelist.set(False)
+
+    @reactive.Effect
+    @reactive.event(input.genelist_show_anyway)
+    def handle_genelist_show_anyway():
+        confirmed_large_genelist.set(True)
+
+    @reactive.Calc
+    def is_genelist_too_large():
+        edge_df = genelist_edge_data()
+        if edge_df is None: return False
+        return len(edge_df) > 1000 and not confirmed_large_genelist()
+
     @output
     @render.ui
     def genelist_graph_container():
@@ -74,6 +92,17 @@ def genelist_server(input, output, session, session_id):
         if not genes: return ui.div("Enter gene symbols and click 'Find Connections'.", class_="text-muted")
         df = GLOBAL_DATA.get(input.genelist_dataset())
         if df is None: return ui.div("Dataset not available.", class_="alert alert-warning")
+        
+        # Check for large network
+        if is_genelist_too_large():
+            edge_df = genelist_edge_data()
+            return ui.div(
+                ui.h4("Large Network Warning", class_="text-warning"),
+                ui.p(f"This network contains {len(edge_df)} edges. The table is available below, but the interactive visualization is hidden to prevent browser slowness."),
+                ui.input_action_button("genelist_show_anyway", "Visualize Anyway", class_="btn-warning"),
+                class_="alert alert-warning p-4 text-center my-4"
+            )
+
         is_directed = input.genelist_dataset() in DIRECTED_DATASETS
         graph_file_path = graph_utils.create_gene_list_graph(df, genes, directed=is_directed)
         if graph_file_path and os.path.exists(graph_file_path):
