@@ -1,6 +1,6 @@
 from shiny import App
 import os
-from starlette.responses import HTMLResponse
+from starlette.responses import HTMLResponse, JSONResponse
 from starlette.requests import Request
 
 import config
@@ -16,6 +16,24 @@ config.load_global_data()
 
 from starlette.applications import Starlette
 from starlette.routing import Route
+
+# --- JSON API Endpoint ---
+async def json_api_endpoint(request: Request):
+    dataset_key = request.path_params.get("dataset")
+    gene_symbol = request.path_params.get("gene", "").upper()
+    
+    if dataset_key not in config.GLOBAL_DATA:
+        return JSONResponse({"error": f"Dataset '{dataset_key}' not found."}, status_code=404)
+        
+    df = config.GLOBAL_DATA[dataset_key]
+    sub_df = data_loader.get_subnetwork(df, [gene_symbol])
+    
+    if sub_df.empty:
+        return JSONResponse({"data": []})
+        
+    # Convert to list of dicts
+    records = sub_df.to_dict(orient="records")
+    return JSONResponse({"data": records})
 
 # --- Graph API Endpoint (Method 2) ---
 async def graph_api_endpoint(request: Request):
@@ -51,5 +69,6 @@ async def graph_api_endpoint(request: Request):
 
 app = App(app_ui, server, static_assets={"/static": str(config.STATIC_DIR)})
 
-# Insert route directly into the beginning of the Starlette router
+# Insert routes directly into the beginning of the Starlette router
 app.starlette_app.router.routes.insert(0, Route("/graph/{dataset}/{gene}", graph_api_endpoint))
+app.starlette_app.router.routes.insert(0, Route("/api/network/{dataset}/{gene}", json_api_endpoint))
